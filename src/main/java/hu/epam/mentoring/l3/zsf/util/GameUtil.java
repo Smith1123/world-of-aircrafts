@@ -1,5 +1,6 @@
 package hu.epam.mentoring.l3.zsf.util;
 
+import hu.epam.mentoring.l3.zsf.engine.Game;
 import hu.epam.mentoring.l3.zsf.model.Aircraft;
 import hu.epam.mentoring.l3.zsf.model.Team;
 import hu.epam.mentoring.l3.zsf.model.TeamColor;
@@ -28,6 +29,31 @@ public class GameUtil {
         }
 
         return result;
+    }
+
+    public static Aircraft getAircraft(List<Aircraft> aircrafts, Team.Point aircraftPoint) {
+        var optionalAircraft =
+                aircrafts.stream().filter(
+                        aircraft -> aircraft.getCoordinate().equals(aircraftPoint)).findAny();
+        if (optionalAircraft.isEmpty()) {
+            throw  new IllegalStateException("Aircraft must be there (" + aircraftPoint + ")!");
+        }
+
+        return optionalAircraft.get();
+    }
+
+    public static Team getTeam(TeamColor teamColor) {
+        return switch (teamColor) {
+            case RED -> Game.getTeamRed();
+            case BLUE -> Game.getTeamBlue();
+        };
+    }
+
+    public static TeamColor getEnemyTeamColor(TeamColor ownTeamColor) {
+        return switch (ownTeamColor) {
+            case RED -> TeamColor.BLUE;
+            case BLUE -> TeamColor.RED;
+        };
     }
 
     private static int calculateX(int size) {

@@ -6,7 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class UseCaseGenerator {
-    public static List<ActionTestData> generateTestData(int round) {
+    public static List<Action> generateTestData(int round) {
         for (int i = 0; i < round; i++) {
 
         }

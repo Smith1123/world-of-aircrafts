@@ -1,7 +1,9 @@
 package hu.epam.mentoring.l3.zsf.engine;
 
 import hu.epam.mentoring.l3.zsf.controller.model.Action;
-import hu.epam.mentoring.l3.zsf.model.ActionEnum;
+import hu.epam.mentoring.l3.zsf.controller.model.FlyAction;
+import hu.epam.mentoring.l3.zsf.controller.model.LocateAircraftAction;
+import hu.epam.mentoring.l3.zsf.controller.model.ShootAction;
 import hu.epam.mentoring.l3.zsf.model.Aircraft;
 import hu.epam.mentoring.l3.zsf.model.Team;
 import hu.epam.mentoring.l3.zsf.model.TeamColor;
@@ -11,6 +13,8 @@ import org.springframework.stereotype.Service;
 import java.util.*;
 
 import static hu.epam.mentoring.l3.zsf.util.GameConstants.COORDINATE_SYSTEM_SIZE;
+import static hu.epam.mentoring.l3.zsf.util.GameUtil.getEnemyTeamColor;
+import static hu.epam.mentoring.l3.zsf.util.GameUtil.getTeam;
 
 @Service
 public class GameService {
@@ -37,64 +41,41 @@ public class GameService {
     }
 
     private boolean makeAction(Team team, Action action) {
-        if (TeamColor.RED.equals(team.getTeamColor()) && !Game.hasTeamRedActionInThisRound()) {
+        if (TeamColor.RED.equals(team.getTeamColor()) && Game.hasTeamRedMakeMove()) {
             return false;
         }
 
-        if (TeamColor.BLUE.equals(team.getTeamColor()) && !Game.hasTeamBlueActionInThisRound()) {
+        if (TeamColor.BLUE.equals(team.getTeamColor()) && Game.hasTeamBlueMakeMove()) {
             return false;
         }
 
-        return switch (action.actionEnum()) {
-            case FLY -> fly(team, action.aircraftPosition(), action.targetPoint());
-            case LOCATE_AIRCRAFT ->
-                locateAircraft(getEnemyTeamColor(team.getTeamColor()), action.targetPoint());
-            case SHOOT -> shoot(getEnemyTeamColor(team.getTeamColor()), action.targetPoint());
+        return switch (action) {
+            case FlyAction flyAction -> flyAction.fly(team);
+            case LocateAircraftAction locateAircraftAction ->
+                locateAircraftAction.locateAircraft(getEnemyTeamColor(team.getTeamColor()));
+            case ShootAction shootAction ->
+                shootAction.shoot(getEnemyTeamColor(team.getTeamColor()));
         };
 
     }
 
-    private boolean fly(Team team, Team.Point aircraftPoint, Team.Point targetPoint) {
-        getAircraft(team.getAircrafts(), aircraftPoint).setCoordinate(targetPoint);
-        return true;
-    }
-
-    private boolean locateAircraft(TeamColor targetTeamColor, Team.Point targetPoint) {
-        return getTeam(targetTeamColor).getAircrafts().stream().anyMatch(
-            aircraft -> aircraft.getCoordinate().equals(targetPoint)
-        );
-    }
-
-    private boolean shoot(TeamColor targetTeamColor, Team.Point targetPoint) {
-        var optionalAircraft =
-            getTeam(targetTeamColor).getAircrafts().stream().filter(
-                aircraft -> aircraft.getCoordinate().equals(targetPoint)
-            ).findAny();
-
-        if (optionalAircraft.isPresent()) {
-            optionalAircraft.get().setAlive(false);
-            return true;
-        }
-
-        return false;
-    }
-
     private void validateActions(Team team, List<Action> actions) {
-        if (team.getAircrafts().size() != actions.size()) {
+        long aircraftSize = team.getAircrafts().stream().filter(Aircraft::isAlive).count();
+        if (aircraftSize != actions.size()) {
             throw new IllegalArgumentException(
-                "Actions size must be " + GameConstants.AIRCRAFT_SIZE + "!"
+                "Actions size must be " + aircraftSize + "!"
             );
         }
     }
 
     private void validateAction(Team team, Action action) {
-        validateAircraftCoordinate(action.aircraftPosition());
-        validateAircraftExistence(action.aircraftPosition(), team);
-        validateAircraftCoordinate(action.targetPoint());
+        validateAircraftCoordinate(action.getAircraftPosition());
+        validateAircraftExistence(action.getAircraftPosition(), team);
+        validateAircraftCoordinate(action.getTargetPoint());
 
-        if (Objects.requireNonNull(action.actionEnum()) == ActionEnum.FLY) {
+        if (Objects.requireNonNull(action) instanceof FlyAction flyAction) {
             validateMove(
-                team.getTeamColor(), action.aircraftPosition(), action.targetPoint()
+                team.getTeamColor(), flyAction.getAircraftPosition(), flyAction.getTargetPoint()
             );
         }
     }
@@ -108,7 +89,9 @@ public class GameService {
     }
 
     private void validateAircraftExistence(Team.Point point, Team team) {
-        if (team.getAircrafts().stream().noneMatch(aircraft -> aircraft.getCoordinate().equals(point))) {
+        if (team.getAircrafts().stream().noneMatch(
+            aircraft -> aircraft.getCoordinate().equals(point) && aircraft.isAlive()
+        )) {
             throw new IllegalArgumentException(
                     "Aircraft not exist in " + team.getTeamColor() + " team (" + point + ")"
             );
@@ -117,9 +100,9 @@ public class GameService {
     private void validateMove(TeamColor teamColor, Team.Point aircraftPosition, Team.Point targetPosition) {
         var enemyTeam = getTeam(getEnemyTeamColor(teamColor));
         var enemyAircraft =
-                enemyTeam.getAircrafts().stream().filter(
-                        aircraft -> aircraft.getCoordinate().equals(targetPosition)
-                ).findAny();
+            enemyTeam.getAircrafts().stream().filter(
+                aircraft -> aircraft.getCoordinate().equals(targetPosition)
+            ).findAny();
         if (enemyAircraft.isPresent()) {
             throw new IllegalArgumentException(
                 "On target point is an enemy aircraft (" + targetPosition + ")"
@@ -137,30 +120,5 @@ public class GameService {
                 "Can't move to " + targetPosition + "! Your position is " + aircraftPosition
             );
         }
-    }
-
-    private Team getTeam(TeamColor teamColor) {
-        return switch (teamColor) {
-            case RED -> Game.getTeamRed();
-            case BLUE -> Game.getTeamBlue();
-        };
-    }
-
-    private TeamColor getEnemyTeamColor(TeamColor ownTeamColor) {
-        return switch (ownTeamColor) {
-            case RED -> TeamColor.BLUE;
-            case BLUE -> TeamColor.RED;
-        };
-    }
-
-    private Aircraft getAircraft(List<Aircraft> aircrafts, Team.Point aircraftPoint) {
-        var optionalAircraft =
-            aircrafts.stream().filter(
-                aircraft -> aircraft.getCoordinate().equals(aircraftPoint)).findAny();
-        if (optionalAircraft.isEmpty()) {
-            throw  new IllegalStateException("Aircraft must be there (" + aircraftPoint + ")!");
-        }
-
-        return optionalAircraft.get();
     }
 }

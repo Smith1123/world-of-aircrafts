@@ -28,9 +28,9 @@ public class Game implements Runnable {
 
     private static Team teamBlue;
 
-    private static boolean hasTeamRedActionInThisRound;
+    private static boolean hasTeamRedMakeMove;
 
-    private static boolean hasTeamBlueActionInThisRound;
+    private static boolean hasTeamBlueMakeMove;
 
     private static Map<TeamColor, String> teamRoundLog;
 
@@ -44,13 +44,11 @@ public class Game implements Runnable {
         teamRed = new Team(TeamColor.RED);
         teamBlue = new Team(TeamColor.BLUE);
         currentRound = 1;
-        hasTeamRedActionInThisRound = true;
-        hasTeamBlueActionInThisRound = true;
         teamRoundLog = new HashMap<>();
     }
 
     public static boolean isRoundComplete() {
-        return !hasTeamRedActionInThisRound() && !hasTeamBlueActionInThisRound();
+        return hasTeamRedMakeMove && hasTeamBlueMakeMove;
     }
 
     public static void logState(Team team, Map<Action, Boolean> actionResults) {
@@ -60,9 +58,9 @@ public class Game implements Runnable {
                 actionLogs.add(
                     MessageFormat.format(
                         ACTION_TEMPLATE,
-                        action.actionEnum(),
-                        action.aircraftPosition(),
-                        action.targetPoint(),
+                        action.getType().getName(),
+                        action.getAircraftPosition(),
+                        action.getTargetPoint(),
                         aBoolean ? "SUCCESS" : "FAILED"
                     )
                 )
@@ -100,29 +98,32 @@ public class Game implements Runnable {
         return teamBlue;
     }
 
-    public static boolean hasTeamRedActionInThisRound() {
-        return hasTeamRedActionInThisRound;
+    public static boolean hasTeamRedMakeMove() {
+        return hasTeamRedMakeMove;
     }
 
-    public static boolean hasTeamBlueActionInThisRound() {
-        return hasTeamBlueActionInThisRound;
+    public static boolean hasTeamBlueMakeMove() {
+        return hasTeamBlueMakeMove;
     }
 
     public static void setTeamCompletedRound(TeamColor teamColor) {
         if (TeamColor.RED.equals(teamColor)) {
-            Game.hasTeamRedActionInThisRound = false;
+            Game.hasTeamRedMakeMove = true;
         }
 
         if (TeamColor.BLUE.equals(teamColor)) {
-            Game.hasTeamBlueActionInThisRound = false;
+            Game.hasTeamBlueMakeMove = true;
         }
     }
 
     public static synchronized void incrementRound() {
-        currentRound++;
-        hasTeamRedActionInThisRound = true;
-        hasTeamBlueActionInThisRound = true;
+        hasTeamRedMakeMove = false;
+        hasTeamBlueMakeMove = false;
         teamRoundLog.values().forEach(System.out::println);
-        System.out.println("Next round is " + currentRound);
+
+        if (currentRound < TOTAL_ROUNDS) {
+            currentRound++;
+            System.out.println("Next round is " + currentRound);
+        }
     }
 }
